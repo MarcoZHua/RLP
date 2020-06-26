@@ -1,0 +1,43 @@
+import numpy as np
+
+
+class WorkSection:
+    consNo = 0  # 施工段号
+    workNo = 0  # 作业段号
+    duration = 0  # 持续时长
+    resDemand = np.zeros(shape=(duration, 3), dtype=int)  # 重点工程机械资源需求量矩阵
+    st = 0  # 开始工作日期
+    ft = 0  # 完成工作日期
+    startDay = 0  # 作业时间范围
+    stopDay = 0  # 作业时间范围
+
+    def setNumber(self, consNumb, workNumb):
+        self.consNo = consNumb
+        self.workNo = workNumb
+
+    def getNumber(self):
+        return f"该作业段为施工段{self.consNo}的第{self.workNo}个作业段"
+
+    def setDuration(self, dur):
+        self.duration = dur
+
+    def getDuration(self):
+        return f"该作业段的工期为{self.duration}"
+
+    def setResDemand(self,resd):
+        self.resDemand = resd
+
+    def getResDemand(self):
+        return f"该作业段的资源需求矩阵为{self.resDemand}"
+
+    def setTimeWindows(self, startday, stopday):
+        self.startDay = startday
+        self.stopDay = stopday
+
+    def getTimeWindows(self):
+        return f"该作业段的作业时间范围是{self.startDay}至{self.stopDay}"
+
+
+def rightShift(ws):
+    pass
+
