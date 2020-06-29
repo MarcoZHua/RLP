@@ -1,0 +1,192 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from openpyexcel import load_workbook
+# from datetime import datetime
+from datetime import timedelta
+
+wb = load_workbook('E:\\施工平台\\任务计划输入.xlsx')
+dateInfo = wb[wb.sheetnames[0]]
+resInfo = wb[wb.sheetnames[3]]
+date1 = dateInfo.cell(row=2, column=1).value
+date2 = dateInfo.cell(row=2, column=2).value
+projectDur = (date2-date1).days+1  # 给定施工方案的工期
+projectResD = np.zeros(shape=(3, projectDur), dtype=int)
+ws_total = []
+for i in resInfo['B']:
+    if i.value and (i.value != '作业段'):
+        ws_total.append(i.value)
+print(ws_total)
+
+
+class WorkSection:
+    consNo = 0  # 施工段号
+    workNo = 0  # 作业段号
+    duration = 0  # 持续时长
+    resDemand = np.zeros(shape=(3, duration), dtype=int)  # 重点工程机械资源需求量矩阵
+    st = 0  # 开始工作日期
+    ft = 0  # 完成工作日期
+    startDay = 0  # 作业时间范围
+    stopDay = 0  # 作业时间范围
+
+    def setNumber(self, consNumb, workNumb):
+        self.consNo = consNumb
+        self.workNo = workNumb
+
+    def getNumber(self):
+        return f"该作业段为施工段{self.consNo}的第{self.workNo}个作业段"
+
+    def setDuration(self, dur):
+        self.duration = dur
+
+    def getDuration(self):
+        return f"该作业段的工期为{self.duration}"
+
+    def setResDemand(self, resd):
+        self.resDemand = resd
+
+    def getResDemand(self):
+        return f"该作业段的资源需求矩阵为{self.resDemand}"
+
+    def setTimeWindows(self, startday, stopday):
+        self.startDay = startday
+        self.stopDay = stopday
+
+    def getTimeWindows(self):
+        return f"该作业段的作业时间范围是{self.startDay}至{self.stopDay}"
+
+
+# 初始化所有作业段
+a01 = WorkSection()
+ws_dur = dateInfo.cell(row=2, column=9).value
+a01.setDuration(ws_dur)
+a01.setTimeWindows((dateInfo.cell(row=2, column=7).value-date1).days+1,
+                   (dateInfo.cell(row=2, column=8).value-date1).days+1)
+resD = np.zeros(shape=(3, ws_dur), dtype=int)
+ini = 3
+for i in range(4, 7):
+    for j in range(3, 3+ws_dur):
+        resD[i-4][j-3] = resInfo.cell(row=j, column=i).value
+ini += ws_dur
+a01.setResDemand(resD)
+
+
+a02 = WorkSection()
+a02.setDuration(3)
+a02.setTimeWindows(1, 3)
+resD = np.array([[5, 3, 2], [0, 4, 4], [3, 3, 4]])
+a02.setResDemand(resD)
+
+a03 = WorkSection()
+a03.setDuration(3)
+a03.setTimeWindows(1, 5)
+resD = np.array([[6, 3, 2], [0, 4, 2], [2, 3, 5]])
+a03.setResDemand(resD)
+
+b01 = WorkSection()
+b01.setDuration(3)
+b01.setTimeWindows(3, 8)
+resD = np.array([[6, 3, 2], [0, 2, 3], [3, 4, 5]])
+b01.setResDemand(resD)
+
+b02 = WorkSection()
+b02.setDuration(2)
+b02.setTimeWindows(4, 8)
+resD = np.array([[5, 3], [2, 2], [3, 4]])
+b02.setResDemand(resD)
+
+b03 = WorkSection()
+b03.setDuration(3)
+b03.setTimeWindows(5, 7)
+resD = np.array([[6, 3, 2], [0, 5, 3], [3, 2, 3]])
+b03.setResDemand(resD)
+
+
+def caseSet(ws):
+    """
+    返回每个作业段可能的开始日期及对应的结束日期
+    :param ws:
+    :return:
+    """
+    case = []
+    ws.st = ws.startDay
+    while ws.st+ws.duration <= ws.stopDay+1:
+        case.append([ws.st, ws.st+ws.duration-1])
+        ws.st += 1
+    return case
+
+
+# 计算每个作业段可能的开始日期和结束日期列表
+caseSet_a01 = caseSet(a01)
+caseSet_a02 = caseSet(a02)
+caseSet_a03 = caseSet(a03)
+caseSet_b01 = caseSet(b01)
+caseSet_b02 = caseSet(b02)
+caseSet_b03 = caseSet(b03)
+
+
+# 使用枚举法，计算RLI最小的情况下，资源需求矩阵resMatrix
+vList = []
+resList = []
+outList = []
+resMatrix = []
+for t1 in caseSet_a01:
+    projectResD[:, t1[0]-1:t1[1]] += a01.resDemand
+    for t2 in caseSet_a02:
+        projectResD[:, t2[0]-1:t2[1]] += a02.resDemand
+        for t3 in caseSet_a03:
+            projectResD[:, t3[0]-1:t3[1]] += a03.resDemand
+            for t4 in caseSet_b01:
+                projectResD[:, t4[0]-1:t4[1]] += b01.resDemand
+                for t5 in caseSet_b02:
+                    projectResD[:, t5[0]-1:t5[1]] += b02.resDemand
+                    for t6 in caseSet_b03:
+                        projectResD[:, t6[0]-1:t6[1]] += b03.resDemand
+                        temp = np.var(projectResD[0, :])+np.var(projectResD[1, :])+np.var(projectResD[2, :])
+                        vList.append(temp)
+                        if temp == min(vList):
+                            resList.append(temp)
+                            outList.append([t1, t2, t3, t4, t5, t6])
+                            resMatrix.append(projectResD.copy())
+                        projectResD[:, t6[0]-1:t6[1]] -= b03.resDemand
+                    projectResD[:, t5[0]-1:t5[1]] -= b02.resDemand
+                projectResD[:, t4[0]-1:t4[1]] -= b01.resDemand
+            projectResD[:, t3[0]-1:t3[1]] -= a03.resDemand
+        projectResD[:, t2[0]-1:t2[1]] -= a02.resDemand
+    projectResD[:, t1[0]-1:t1[1]] -= a01.resDemand
+print(outList[resList.index(min(resList))])
+print(resMatrix[resList.index(min(resList))])
+
+
+# 作资源需求量图
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+x_lab = []
+d = date1
+for _ in range(projectDur):
+    x_lab.append(d.strftime('%m/%d'))
+    d = d+timedelta(days=1)
+# x_lab = ['6/23', '6/24', '6/25', '6/26', '6/27', '6/28', '6/29', '6/30']
+rlp = resMatrix[resList.index(min(resList))]
+plt.yticks(ticks=np.arange(0, 15, 1))
+plt.bar(range(projectDur), rlp[0], width=0.2, color='dodgerblue')
+plt.bar([i+0.2 for i in range(projectDur)], rlp[1], width=0.2, color='orangered')
+plt.bar([i+0.4 for i in range(projectDur)], rlp[2], width=0.2, color='orchid')
+plt.xticks([i + 0.2 for i in range(projectDur)], x_lab)
+plt.legend(['推土机需求量', '平地机需求量', '压路机需求量'])
+plt.title("重点工程机械需求量图")
+plt.xlabel("日期")
+plt.ylabel('台时')
+x_total = np.array(projectDur)
+for x, y1 in zip(range(x_total), rlp[0]):
+    plt.text(x, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+for x, y1 in zip(range(x_total), rlp[1]):
+    plt.text(x+0.2, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+for x, y1 in zip(range(x_total), rlp[2]):
+    plt.text(x+0.4, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+plt.show()
+
+# 将资源需求矩阵输出到excel
+
+# 将outList输出到excel，具体表现为某作业段的开始日期为哪一天date，结束日其为哪一天date
+
+# 输出每个作业段具体在哪个日期执行哪一天的任务
