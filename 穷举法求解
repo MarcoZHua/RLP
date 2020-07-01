@@ -15,7 +15,7 @@ ws_total = []
 for i in resInfo['B']:
     if i.value and (i.value != '作业段'):
         ws_total.append(i.value)
-print(ws_total)
+# print(ws_total)
 
 
 class WorkSection:
@@ -153,7 +153,16 @@ for t1 in caseSet_a01:
             projectResD[:, t3[0]-1:t3[1]] -= a03.resDemand
         projectResD[:, t2[0]-1:t2[1]] -= a02.resDemand
     projectResD[:, t1[0]-1:t1[1]] -= a01.resDemand
-print(outList[resList.index(min(resList))])
+
+# 将作业段相对施工方案起点的天数转化为绝对日期
+day_t_date = outList[resList.index(min(resList))]
+for i in range(len(ws_total)):
+    for j in range(2):
+        day_t_date[i][j] = (date1+timedelta(days=day_t_date[i][j]-1))
+for i in range(len(ws_total)):
+    print("作业段{}的开始日期为{},结束日期为{}".format(i+1, day_t_date[i][0].strftime("%m月%d日"), day_t_date[i][1].strftime("%m月%d日")))
+
+print("施工方案工期内每日资源需求量为")
 print(resMatrix[resList.index(min(resList))])
 
 
@@ -186,7 +195,13 @@ for x, y1 in zip(range(x_total), rlp[2]):
 plt.show()
 
 # 将资源需求矩阵输出到excel
+d = date1
+resm = resMatrix[resList.index(min(resList))]
+while d <= date2:
+    for i in range(len(ws_total)):
+        if day_t_date[i][0] <= d <= day_t_date[i][1]:
+            print("{}需要完成的作业段{}的第{}天任务".format(d.strftime("%m月%d日"), i+1, (d-day_t_date[i][0]).days+1))
+    print("{}对资源的需求情况为：推土机{}台时，平地机{}台时，压路机{}台时".
+          format(d.strftime("%m月%d日"), resm[0][(d-date1).days], resm[1][(d-date1).days], resm[2][(d-date1).days]))
+    d = d+timedelta(days=1)
 
-# 将outList输出到excel，具体表现为某作业段的开始日期为哪一天date，结束日其为哪一天date
-
-# 输出每个作业段具体在哪个日期执行哪一天的任务
