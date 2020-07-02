@@ -122,37 +122,45 @@ caseSet_a03 = caseSet(a03)
 caseSet_b01 = caseSet(b01)
 caseSet_b02 = caseSet(b02)
 caseSet_b03 = caseSet(b03)
+allCaseSet = [caseSet_a01, caseSet_a02, caseSet_a03, caseSet_b01, caseSet_b02, caseSet_b03]
+allResDemand = [a01.resDemand, a02.resDemand, a03.resDemand, b01.resDemand, b02.resDemand, b03.resDemand]
 
 
-# 使用枚举法，计算RLI最小的情况下，资源需求矩阵resMatrix
-vList = []
+def enum(all_case, idx):
+    """
+    枚举法列出所有可能结果,使用递归算法
+    :param all_case: 输入各作业段的所有移动情况
+    :param idx:
+    :return:
+        returnMatrix包含所有可能结果对应的资源消耗矩阵
+        outList包含了所有可能结果对应各作业段的开始日期和结束日期
+    """
+    if idx == len(all_case):
+        return [np.zeros(shape=(3, projectDur), dtype=int)], [[]]
+
+    return_Matrix = []
+    out_List = []
+    current = all_case[idx]
+    for case in current:
+        next_current, oList = enum(all_case, idx+1)
+        for next_case in next_current:
+            next_case[:, case[0]-1:case[1]] += allResDemand[idx]
+            return_Matrix.append(next_case)
+        for sub_list in oList:
+            sub_list.insert(0, case)
+            out_List.append(sub_list)
+
+    return return_Matrix, out_List
+
+
+resMatrix, outList = enum(allCaseSet, 0)
 resList = []
-outList = []
-resMatrix = []
-for t1 in caseSet_a01:
-    projectResD[:, t1[0]-1:t1[1]] += a01.resDemand
-    for t2 in caseSet_a02:
-        projectResD[:, t2[0]-1:t2[1]] += a02.resDemand
-        for t3 in caseSet_a03:
-            projectResD[:, t3[0]-1:t3[1]] += a03.resDemand
-            for t4 in caseSet_b01:
-                projectResD[:, t4[0]-1:t4[1]] += b01.resDemand
-                for t5 in caseSet_b02:
-                    projectResD[:, t5[0]-1:t5[1]] += b02.resDemand
-                    for t6 in caseSet_b03:
-                        projectResD[:, t6[0]-1:t6[1]] += b03.resDemand
-                        temp = np.var(projectResD[0, :])+np.var(projectResD[1, :])+np.var(projectResD[2, :])
-                        vList.append(temp)
-                        if temp == min(vList):
-                            resList.append(temp)
-                            outList.append([t1, t2, t3, t4, t5, t6])
-                            resMatrix.append(projectResD.copy())
-                        projectResD[:, t6[0]-1:t6[1]] -= b03.resDemand
-                    projectResD[:, t5[0]-1:t5[1]] -= b02.resDemand
-                projectResD[:, t4[0]-1:t4[1]] -= b01.resDemand
-            projectResD[:, t3[0]-1:t3[1]] -= a03.resDemand
-        projectResD[:, t2[0]-1:t2[1]] -= a02.resDemand
-    projectResD[:, t1[0]-1:t1[1]] -= a01.resDemand
+for pos in resMatrix:
+    resList.append(np.var(pos[0, :])+np.var(pos[1, :])+np.var(pos[2, :]))
+print(min(resList))
+print(resMatrix[resList.index(min(resList))])
+print(outList[resList.index(min(resList))])
+
 
 # 将作业段相对施工方案起点的天数转化为绝对日期
 day_t_date = outList[resList.index(min(resList))]
