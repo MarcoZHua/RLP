@@ -1,0 +1,245 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from openpyexcel import load_workbook
+# from openpyexcel import Workbook
+# from datetime import datetime
+import time
+from datetime import timedelta
+time1 = time.time()
+wb = load_workbook('E:\\施工平台\\施工任务计划输入.xlsx')
+dateInfo = wb[wb.sheetnames[0]]
+resInfo = wb[wb.sheetnames[1]]
+subWBS = wb[wb.sheetnames[2]]
+date1 = dateInfo.cell(row=2, column=1).value
+date2 = dateInfo.cell(row=2, column=2).value
+projectDur = (date2-date1).days+1  # 给定施工方案的工期
+projectResD = np.zeros(shape=(3, projectDur), dtype=int)
+ws_total = []
+for i in resInfo['B']:
+    if i.value and (i.value != '作业段'):
+        ws_total.append(i.value)
+# print(ws_total)
+
+
+class WorkSection:
+    consNo = 0  # 施工段号
+    workNo = 0  # 作业段号
+    duration = 0  # 持续时长
+    resDemand = np.zeros(shape=(3, duration), dtype=int)  # 重点工程机械资源需求量矩阵
+    st = 0  # 开始工作日期
+    ft = 0  # 完成工作日期
+    startDay = 0  # 作业时间范围
+    stopDay = 0  # 作业时间范围
+
+    def setNumber(self, consNumb, workNumb):
+        self.consNo = consNumb
+        self.workNo = workNumb
+
+    def getNumber(self):
+        return f"该作业段为施工段{self.consNo}的第{self.workNo}个作业段"
+
+    def setDuration(self, dur):
+        self.duration = dur
+
+    def getDuration(self):
+        return f"该作业段的工期为{self.duration}"
+
+    def setResDemand(self, resd):
+        self.resDemand = resd
+
+    def getResDemand(self):
+        return f"该作业段的资源需求矩阵为{self.resDemand}"
+
+    def setTimeWindows(self, startday, stopday):
+        self.startDay = startday
+        self.stopDay = stopday
+
+    def getTimeWindows(self):
+        return f"该作业段的作业时间范围是{self.startDay}至{self.stopDay}"
+
+
+# 初始化所有作业段
+ws_total[0] = WorkSection()
+ws_dur = dateInfo.cell(row=2, column=9).value
+ws_total[0].setDuration(ws_dur)
+ws_total[0].setTimeWindows((dateInfo.cell(row=2, column=7).value-date1).days+1,
+                           (dateInfo.cell(row=2, column=8).value-date1).days+1)
+resD = np.zeros(shape=(3, ws_dur), dtype=int)
+ini = 3
+for i in range(4, 7):
+    for j in range(3, 3+ws_dur):
+        resD[i-4][j-3] = resInfo.cell(row=j, column=i).value
+ini += ws_dur
+ws_total[0].setResDemand(resD)
+
+
+ws_total[1] = WorkSection()
+ws_total[1].setDuration(3)
+ws_total[1].setTimeWindows(1, 3)
+resD = np.array([[5, 3, 2], [0, 4, 4], [3, 3, 4]])
+ws_total[1].setResDemand(resD)
+
+ws_total[2] = WorkSection()
+ws_total[2].setDuration(3)
+ws_total[2].setTimeWindows(1, 5)
+resD = np.array([[6, 3, 2], [0, 4, 2], [2, 3, 5]])
+ws_total[2].setResDemand(resD)
+
+ws_total[3] = WorkSection()
+ws_total[3].setDuration(3)
+ws_total[3].setTimeWindows(3, 8)
+resD = np.array([[6, 3, 2], [0, 2, 3], [3, 4, 5]])
+ws_total[3].setResDemand(resD)
+
+ws_total[4] = WorkSection()
+ws_total[4].setDuration(2)
+ws_total[4].setTimeWindows(4, 8)
+resD = np.array([[5, 3], [2, 2], [3, 4]])
+ws_total[4].setResDemand(resD)
+
+ws_total[5] = WorkSection()
+ws_total[5].setDuration(3)
+ws_total[5].setTimeWindows(5, 7)
+resD = np.array([[6, 3, 2], [0, 5, 3], [3, 2, 3]])
+ws_total[5].setResDemand(resD)
+
+
+def caseSet(ws):
+    """
+    返回每个作业段可能的开始日期及对应的结束日期
+    :param ws:
+    :return:
+    """
+    case = []
+    ws.st = ws.startDay
+    while ws.st+ws.duration <= ws.stopDay+1:
+        case.append([ws.st, ws.st+ws.duration-1])
+        ws.st += 1
+    return case
+
+
+# 计算每个作业段可能的开始日期和结束日期列表
+allCaseSet = []
+allResDemand = []
+for workSection in ws_total:
+    allCaseSet.append(caseSet(workSection))
+    allResDemand.append(workSection.resDemand)
+
+
+def enum(all_case, idx):
+    """
+    枚举法列出所有可能结果,使用递归算法
+    :param all_case: 输入各作业段的所有移动情况
+    :param idx:
+    :return:
+        returnMatrix包含所有可能结果对应的资源消耗矩阵
+        outList包含了所有可能结果对应各作业段的开始日期和结束日期
+    """
+    if idx == len(all_case):
+        return [np.zeros(shape=(3, projectDur), dtype=int)], [[]]
+
+    return_Matrix = []
+    out_List = []
+    current = all_case[idx]
+    for case in current:
+        next_current, oList = enum(all_case, idx+1)
+        for next_case in next_current:
+            next_case[:, case[0]-1:case[1]] += allResDemand[idx]
+            return_Matrix.append(next_case)
+        for sub_list in oList:
+            sub_list.insert(0, case)
+            out_List.append(sub_list)
+
+    return return_Matrix, out_List
+
+
+resMatrix, outList = enum(allCaseSet, 0)
+resList = []
+for pos in resMatrix:
+    resList.append(np.var(pos[0, :])+np.var(pos[1, :])+np.var(pos[2, :]))
+print(min(resList))
+print(resMatrix[resList.index(min(resList))])
+print(outList[resList.index(min(resList))])
+
+
+# 将作业段相对施工方案起点的天数转化为绝对日期
+day_t_date = outList[resList.index(min(resList))]
+for i in range(len(ws_total)):
+    for j in range(2):
+        day_t_date[i][j] = (date1+timedelta(days=day_t_date[i][j]-1))
+for i in range(len(ws_total)):
+    print("作业段{}的开始日期为{},结束日期为{}".format(i+1, day_t_date[i][0].strftime("%m月%d日"), day_t_date[i][1].strftime("%m月%d日")))
+print("施工方案工期内每日资源需求量为")
+print(resMatrix[resList.index(min(resList))])
+
+
+subWBS_List = [subWBS['C2':'E5'], subWBS['C6':'E9'], subWBS['C10':'E14'], subWBS['C15':'E18'], subWBS['C19':'E22'],
+               subWBS['C23':'E23'], subWBS['C24':'E24'], subWBS['C25':'E25'], subWBS['C26':'E26'], subWBS['C27':'E27'],
+               subWBS['C28':'E28'], subWBS['C29':'E29'], subWBS['C30':'E30'], subWBS['C31':'E31'], subWBS['C32':'E32'],
+               subWBS['C33':'E33']]
+# 使用字典，key使用作业段序号及日期分配，value使用当天的任务以及台时
+# 任务与台时的对应关系可以通过预处理完成？
+dic = {'1-1': subWBS_List[0], '1-2': subWBS_List[1], '2-1': subWBS_List[2], '2-2': subWBS_List[3],
+       '2-3': subWBS_List[4], '3-1': subWBS_List[5], '3-2': subWBS_List[6], '3-3': subWBS_List[7],
+       '4-1': subWBS_List[8], '4-2': subWBS_List[9], '4-3': subWBS_List[10], '5-1': subWBS_List[11],
+       '5-2': subWBS_List[12], '6-1': subWBS_List[13], '6-2': subWBS_List[14], '6-3': subWBS_List[15]}
+# for cells in subWBS_List[0]:
+#     print(f'工序:{cells[0].value}, 工程量:{cells[1].value}, 使用设备为:{cells[2].value}')
+
+
+# 将资源需求矩阵输出到excel
+d = date1
+resm = resMatrix[resList.index(min(resList))]
+while d <= date2:
+    for i in range(len(ws_total)):
+        if day_t_date[i][0] <= d <= day_t_date[i][1]:
+            print("{}需要完成的作业段{}的第{}天任务".format(d.strftime("%m月%d日"), i+1, (d-day_t_date[i][0]).days+1))
+            print("作业段{}的第{}天任务清单包含内容有:".format(i+1, (d-day_t_date[i][0]).days+1))
+            for cells in dic[str(i+1)+'-'+str((d-day_t_date[i][0]).days+1)]:
+                print(f'工序:{cells[0].value}, 工程量:{cells[1].value}, 使用设备为:{cells[2].value}')
+
+    print("{}对资源的需求情况为：推土机{}台时，平地机{}台时，压路机{}台时".
+          format(d.strftime("%m月%d日"), resm[0][(d-date1).days], resm[1][(d-date1).days], resm[2][(d-date1).days]))
+    d = d+timedelta(days=1)
+
+# 作资源需求量图
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+x_lab = []
+d = date1
+for _ in range(projectDur):
+    x_lab.append(d.strftime('%m/%d'))
+    d = d+timedelta(days=1)
+# x_lab = ['6/23', '6/24', '6/25', '6/26', '6/27', '6/28', '6/29', '6/30']
+rlp = resMatrix[resList.index(min(resList))]
+plt.yticks(ticks=np.arange(0, 15, 1))
+plt.bar(range(projectDur), rlp[0], width=0.2, color='dodgerblue')
+plt.bar([i+0.2 for i in range(projectDur)], rlp[1], width=0.2, color='orangered')
+plt.bar([i+0.4 for i in range(projectDur)], rlp[2], width=0.2, color='orchid')
+plt.xticks([i + 0.2 for i in range(projectDur)], x_lab)
+plt.legend(['推土机需求量', '平地机需求量', '压路机需求量'])
+plt.title("重点工程机械需求量图")
+plt.xlabel("日期")
+plt.ylabel('台时')
+x_total = np.array(projectDur)
+for x, y1 in zip(range(x_total), rlp[0]):
+    plt.text(x, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+for x, y1 in zip(range(x_total), rlp[1]):
+    plt.text(x+0.2, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+for x, y1 in zip(range(x_total), rlp[2]):
+    plt.text(x+0.4, y1+0.05,  '%.0f' % y1, ha='center', va='bottom')
+plt.show()
+
+
+# outPut = load_workbook(filename='E:\\施工平台\\每日施工任务清单.xlsx')
+# tempInfo = outPut[outPut.sheetnames[1]]
+# d = date1
+# while d <= date2:
+#     for i in range(len(ws_total)):
+#         if day_t_date[i][0] <= d <= day_t_date[i][1]:
+#             writeList = [d.strftime("%m月%d日"), i+1, (d-day_t_date[i][0]).days+1]
+#             tempInfo.append(writeList)
+#     d = d+timedelta(days=1)
+#
+# outPut.save(filename="E:\\施工平台\\每日施工任务清单.xlsx")
+print(time.time()-time1)
